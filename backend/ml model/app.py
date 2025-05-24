@@ -1,108 +1,210 @@
+import os
+import tempfile
+import json
 import warnings
-from cryptography.utils import CryptographyDeprecationWarning
-warnings.filterwarnings('ignore', category=CryptographyDeprecationWarning)
-warnings.filterwarnings('ignore', module='paramiko')
-warnings.filterwarnings('ignore', category=DeprecationWarning)
-warnings.filterwarnings('ignore', category=UserWarning)
-
+import logging
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import torch
 import librosa
 from transformers import AutoFeatureExtractor, AutoModelForAudioClassification
-import os
-import tempfile
+import requests
+import sys
+
+warnings.filterwarnings('ignore')
 
 app = Flask(__name__)
-# Enable CORS for all routes
-CORS(app, resources={
-    r"/*": {
-        "origins": "*",  # Allow all origins in development
-        "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization", "Accept"]
-    }
-})
+CORS(app)
 
-UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), "uploads")
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+app.logger.setLevel(logging.INFO)
+
 MODEL_NAME = "dima806/bird_sounds_classification"
 MODEL_DIR = os.path.join(os.path.dirname(__file__), "model_cache")
 
-# Ensure upload folder exists
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(MODEL_DIR, exist_ok=True)
+GEMINI_API_KEY = ""
+GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
 
-# Check if model already exists locally
+if not GEMINI_API_KEY:
+    app.logger.error("GEMINI_API_KEY environment variable not set.")
+    sys.exit(1)
+
 def ensure_model_downloaded():
     if not os.path.exists(os.path.join(MODEL_DIR, "config.json")):
-        print("Model not found locally. Downloading from Hugging Face...")
-        AutoFeatureExtractor.from_pretrained(MODEL_NAME).save_pretrained(MODEL_DIR)
-        AutoModelForAudioClassification.from_pretrained(MODEL_NAME).save_pretrained(MODEL_DIR)
-        print("Model downloaded and saved.")
+        app.logger.info(f"Downloading model {MODEL_NAME} to {MODEL_DIR}...")
+        try:
+            AutoFeatureExtractor.from_pretrained(MODEL_NAME).save_pretrained(MODEL_DIR)
+            AutoModelForAudioClassification.from_pretrained(MODEL_NAME).save_pretrained(MODEL_DIR)
+            app.logger.info("Model downloaded successfully.")
+        except Exception as e:
+            app.logger.critical(f"Failed to download model: {e}")
+            sys.exit(1)
 
-# Load model and extractor
 ensure_model_downloaded()
-extractor = AutoFeatureExtractor.from_pretrained(MODEL_DIR)
-model = AutoModelForAudioClassification.from_pretrained(MODEL_DIR)
+
+try:
+    extractor = AutoFeatureExtractor.from_pretrained(MODEL_DIR)
+    model = AutoModelForAudioClassification.from_pretrained(MODEL_DIR)
+    app.logger.info("Model loaded successfully.")
+except Exception as e:
+    app.logger.critical(f"Failed to load model: {e}")
+    sys.exit(1)
+
+
+def call_gemini_api(species_name: str) -> dict:
+    prompt = f"""
+    You are a bird expert. Provide detailed JSON-formatted information about the bird species named '{species_name}'. Include these fields exactly:
+    - scientificName
+    - description
+    - habitat
+    - diet
+    - song
+    - image (URL if possible)
+
+    Respond ONLY with a JSON object. No extra text, no markdown code blocks.
+    """
+
+    headers = {
+        "x-goog-api-key": GEMINI_API_KEY,
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "contents": [
+            {"role": "user", "parts": [{"text": prompt}]}
+        ],
+        "generationConfig": {
+            "temperature": 0.7,
+            "maxOutputTokens": 1000
+        }
+    }
+
+    try:
+        response = requests.post(GEMINI_API_URL, headers=headers, json=payload, timeout=15)
+        response.raise_for_status()
+        data = response.json()
+
+        if 'candidates' in data and data['candidates']:
+            content_parts = data['candidates'][0]['content'].get('parts', [])
+            if content_parts and 'text' in content_parts[0]:
+                raw_content = content_parts[0]['text']
+                # Remove markdown if present
+                if raw_content.strip().startswith("```json") and raw_content.strip().endswith("```"):
+                    raw_content = raw_content.strip()[len("```json"):-3].strip()
+
+                if not raw_content.endswith("}"):
+                    app.logger.warning(f"Possibly truncated JSON from Gemini API for {species_name}")
+                    raise ValueError("Incomplete JSON received.")
+
+                bird_info = json.loads(raw_content)
+                return bird_info
+            else:
+                raise ValueError("No readable content in Gemini response.")
+        else:
+            raise ValueError("Invalid Gemini API response structure.")
+
+    except Exception as e:
+        app.logger.error(f"Gemini API call error for {species_name}: {e}")
+        return {
+            "scientificName": species_name,
+            "description": "No detailed information available from Gemini API.",
+            "habitat": "Unknown",
+            "diet": "Unknown",
+            "song": "Unknown",
+            "image": "https://via.placeholder.com/800x600?text=No+Image"
+        }
+
+
+def get_wikipedia_image(species_name: str) -> str:
+    S = requests.Session()
+    search_url = "https://en.wikipedia.org/w/api.php"
+    search_params = {
+        "action": "query",
+        "list": "search",
+        "srsearch": species_name,
+        "format": "json",
+        "srlimit": 1,
+    }
+    try:
+        response = S.get(search_url, params=search_params)
+        data = response.json()
+        search_results = data.get("query", {}).get("search", [])
+        if not search_results:
+            return "https://via.placeholder.com/800x600?text=No+Image"
+
+        page_title = search_results[0]["title"]
+
+        image_query_params = {
+            "action": "query",
+            "titles": page_title,
+            "prop": "pageimages",
+            "format": "json",
+            "pithumbsize": 800
+        }
+        response = S.get(search_url, params=image_query_params)
+        data = response.json()
+        pages = data.get("query", {}).get("pages", {})
+        for page_id, page_data in pages.items():
+            thumbnail = page_data.get("thumbnail", {})
+            image_url = thumbnail.get("source")
+            if image_url:
+                return image_url
+    except Exception as e:
+        app.logger.error(f"Wikipedia image fetch error for {species_name}: {e}")
+
+    return "https://via.placeholder.com/800x600?text=No+Image"
+
 
 @app.route("/api/classify", methods=["POST"])
 def classify_audio():
-    print("Received request files:", request.files.keys())
-    print("Request headers:", dict(request.headers))
-    print("Processing audio classification request...")
-    
     if "file" not in request.files:
-        print("No file found in request")
         return jsonify({"error": "No file part"}), 400
-        
+
     file = request.files["file"]
-    
     if file.filename == "":
         return jsonify({"error": "No selected file"}), 400
-        
-    # Check file extension
+
     ext = os.path.splitext(file.filename)[1].lower()
     if ext not in [".wav", ".mp3"]:
         return jsonify({"error": "Invalid file type. Only .wav and .mp3 supported."}), 400
-      # Save the uploaded file temporarily
-    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
-    file.save(temp_file.name)
-    temp_file.close()
-    print(f"Saved uploaded file temporarily as: {temp_file.name}")
-    
+
+    temp_file = None
     try:
-        print("Loading audio file with librosa...")
-        # Process the audio file
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
+        file.save(temp_file.name)
+        temp_file.close()
+
         waveform, sr = librosa.load(temp_file.name, sr=extractor.sampling_rate)
-        print(f"Audio loaded successfully. Sample rate: {sr}, Waveform shape: {waveform.shape}")
         inputs = extractor(waveform, sampling_rate=extractor.sampling_rate, return_tensors="pt")
-          # Make prediction
-        print("Running model prediction...")
+
         with torch.no_grad():
             logits = model(**inputs).logits
             predicted_class_id = torch.argmax(logits).item()
             predicted_label = model.config.id2label[predicted_class_id]
-            print(f"Predicted class ID: {predicted_class_id}, Label: {predicted_label}")
-        
-        # Return only the prediction as JSON
+
+        bird_info = call_gemini_api(predicted_label)
+        # Override image URL with Wikipedia image
+        bird_info["image"] = get_wikipedia_image(predicted_label)
+
         response = {
-            "prediction": predicted_label
+            "prediction": predicted_label,
+            "info": bird_info
         }
-        print("Sending prediction response:", response)
-        
         return jsonify(response), 200
-        
+
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
-        
+        app.logger.error(f"Error in classification or Gemini API call: {e}", exc_info=True)
+        return jsonify({"error": f"Internal server error: {str(e)}"}), 500
+
     finally:
-        # Clean up the temporary file
-        if os.path.exists(temp_file.name):
+        if temp_file and os.path.exists(temp_file.name):
             os.unlink(temp_file.name)
 
-# Add a simple health check endpoint
+
 @app.route("/api/health", methods=["GET"])
 def health_check():
     return jsonify({"status": "ok", "model": MODEL_NAME}), 200
+
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5000)

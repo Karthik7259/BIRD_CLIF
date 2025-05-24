@@ -2,18 +2,6 @@ import{ useEffect } from 'react';
 import { ArrowLeft, Volume2, Calendar, MapPin, Info } from 'lucide-react';
 import { useNavigate, useLocation, Navigate } from 'react-router-dom';
 
-const BIRD_INFO = {
-  "Little Tinamou": {
-    scientificName: "Crypturellus soui",
-    image: "https://cdn.download.ams.birds.cornell.edu/api/v1/asset/41537621/1800",
-    description: "The Little Tinamou is a small ground-dwelling bird found in tropical forests. It's known for its distinctive whistling calls and secretive behavior.",
-    habitat: "Tropical and subtropical forests, secondary growth",
-    diet: "Seeds, fruits, and small invertebrates",
-    song: "Clear whistled 'peeeeuw'"
-  }
-  // Add more birds as needed
-};
-
 const Result = () => {  const navigate = useNavigate();
   const location = useLocation();
   
@@ -27,14 +15,7 @@ const Result = () => {  const navigate = useNavigate();
   }
 
   const birdName = location.state.birdName;
-  const birdInfo = BIRD_INFO[birdName] || {
-    scientificName: "Species information not available",
-    image: "https://via.placeholder.com/800x600?text=Bird+Image+Not+Available",
-    description: "Additional information about this species is not available in our database.",
-    habitat: "Not available",
-    diet: "Not available",
-    song: "Not available"
-  };
+  const birdInfo = location.state.birdInfo;
 
   return (
     <div className="min-h-screen bg-slate-950">

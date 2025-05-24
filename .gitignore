@@ -74,6 +74,9 @@ backend/ml model/model_cache/*
 # TypeScript
 *.tsbuildinfo
 
+# Backup files
+*.bak
+
 # Misc
 .DS_Store
 Thumbs.db

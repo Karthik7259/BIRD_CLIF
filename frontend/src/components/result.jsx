@@ -1,13 +1,95 @@
-import{ useEffect } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { ArrowLeft, Volume2, Calendar, MapPin, Info } from 'lucide-react';
 import { useNavigate, useLocation, Navigate } from 'react-router-dom';
+import { MapContainer, TileLayer, useMap, CircleMarker, Popup } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 
-const Result = () => {  const navigate = useNavigate();
+// Create a custom layer for the heatmap
+const HeatLayer = ({ points }) => {
+  const map = useMap();
+  const layerRef = useRef();
+
+  useEffect(() => {
+    if (!map || !points.length) return;
+
+    if (!L.heatLayer) {
+      const script = document.createElement('script');
+      script.src = 'https://unpkg.com/leaflet.heat';
+      script.async = true;
+      document.body.appendChild(script);
+      
+      script.onload = () => {
+        createHeatLayer();
+      };
+    } else {
+      createHeatLayer();
+    }
+
+    function createHeatLayer() {
+      if (layerRef.current) {
+        layerRef.current.remove();
+      }
+
+      const data = points.map(p => [
+        p.latitude,
+        p.longitude,
+        1.0 // intensity
+      ]);      const layer = L.heatLayer(data, {
+        radius: 30,
+        blur: 20,
+        maxZoom: 10,
+        gradient: {
+          0.2: '#0a50c9', // Dark blue (very low concentration)
+          0.4: '#21d1ff', // Light blue (low concentration)
+          0.6: '#44ff00', // Green (medium concentration)
+          0.8: '#ffff00', // Yellow (high concentration)
+          1.0: '#ff0000'  // Red (very high concentration)
+        }
+      });
+
+      layer.addTo(map);
+      layerRef.current = layer;
+    }
+
+    return () => {
+      if (layerRef.current) {
+        layerRef.current.remove();
+      }
+    };
+  }, [map, points]);
+
+  return null;
+};
+
+const Result = () => {
+  const navigate = useNavigate();
   const location = useLocation();
   
-  // Log the received state data
-  console.log('Result page received state:', location.state);
-  
+  // Calculate center and zoom based on coordinates
+  const mapConfig = useMemo(() => {
+    if (location.state?.coordinates?.length > 0) {
+      const coordinates = location.state.coordinates;
+      const lats = coordinates.map(s => s.latitude);
+      const lngs = coordinates.map(s => s.longitude);
+      
+      return {
+        center: [
+          (Math.min(...lats) + Math.max(...lats)) / 2,
+          (Math.min(...lngs) + Math.max(...lngs)) / 2
+        ],
+        zoom: 6,
+        coordinates: coordinates
+      };
+    }
+    
+    return {
+      center: [20.5937, 78.9629], // Default to center of India
+      zoom: 4,
+      coordinates: []
+    };
+  }, [location.state?.coordinates]);
+
   // If no state is present, redirect back to detection page
   if (!location.state?.birdName) {
     console.log('No bird name found in state, redirecting...');
@@ -97,6 +179,42 @@ const Result = () => {  const navigate = useNavigate();
                   <p className="text-slate-300 leading-relaxed">
                     {birdInfo.description}
                   </p>
+                </div>
+
+                {/* Heat Map Section */}
+                <div className="mt-6">
+                  <h2 className="text-lg font-semibold text-white mb-4">Species Distribution</h2>
+                  <div className="bg-slate-800 rounded-lg overflow-hidden h-[300px]">
+                    <MapContainer 
+                      center={mapConfig.center} 
+                      zoom={mapConfig.zoom} 
+                      style={{ height: '100%', width: '100%' }}
+                      scrollWheelZoom={false}
+                    >                      <TileLayer
+                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                      />
+                      <HeatLayer points={mapConfig.coordinates} />
+                      {mapConfig.coordinates.map((location, index) => (
+                        <CircleMarker
+                          key={`${location.state}-${index}`}
+                          center={[location.latitude, location.longitude]}
+                          pathOptions={{ 
+                            color: '#ff0000',
+                            fillColor: '#ff0000',
+                            fillOpacity: 1
+                          }}
+                          radius={6}
+                        >
+                          <Popup>
+                            <div className="text-sm">
+                              <strong>{location.state}</strong>
+                            </div>
+                          </Popup>
+                        </CircleMarker>
+                      ))}
+                    </MapContainer>
+                  </div>
                 </div>
 
                 {/* Audio File Info */}

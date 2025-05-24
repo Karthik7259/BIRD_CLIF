@@ -53,12 +53,13 @@ except Exception as e:
 
 def call_gemini_api(species_name: str) -> dict:
     prompt = f"""
-    You are a bird expert. Provide detailed JSON-formatted information about the bird species named '{species_name}'. Include these fields exactly:
+    You are a bird expert. Provide Consise JSON-formatted information about the bird species named '{species_name}'. Include these fields exactly:
     - scientificName
     - description
     - habitat
     - diet
     - song
+    -available in which countries(in longitude and latitude for heatmap give major exact locations only three places)
     - image (URL if possible)
 
     Respond ONLY with a JSON object. No extra text, no markdown code blocks.
@@ -83,6 +84,7 @@ def call_gemini_api(species_name: str) -> dict:
         response = requests.post(GEMINI_API_URL, headers=headers, json=payload, timeout=15)
         response.raise_for_status()
         data = response.json()
+        print(data)  # Debugging line to see the raw response
 
         if 'candidates' in data and data['candidates']:
             content_parts = data['candidates'][0]['content'].get('parts', [])

@@ -64,26 +64,44 @@ const SpeciesDetection = () => {
 
         // Create FormData to send the file
         const formData = new FormData();
-        formData.append('file', selectedFile);
-
-        // Send the file to the backend
+        formData.append('file', selectedFile);        // Send the file to the backend
         const response = await axios.post(`${API_URL}/api/classify`, formData, {
           headers: {
             'Content-Type': 'multipart/form-data',
             'Accept': 'application/json'
           },
           withCredentials: false,
-          timeout: 30000 // 30 second timeout
-        });
+          timeout: 600000 // 30 second timeout
+        });      
+        
+        console.log('File upload response:', response.data);
+        
+        // Log the coordinates data for debugging      
+        // const locationData = response.data?.info?.available_in_which_countries;
+        // console.log('Bird location data:', locationData);       
+       const locationData = response.data?.info?.["available in which countries"];
+        let coordinates = [];
 
-        // Navigate to result page with just the prediction and filename
-        navigate('/result', {
-        state: {
-          birdName: response.data.prediction,
-          birdInfo: response.data.info,  // <- new addition from backend
-          audioFile: selectedFile.name
+        if (locationData) {
+          locationData.forEach(({ country, latitude, longitude }) => {
+            console.log(`${country}: (${latitude}, ${longitude})`);
+            coordinates.push({
+              latitude: parseFloat(latitude),
+              longitude: parseFloat(longitude),
+              state: country
+            });
+          });
         }
-      });
+        
+        console.log('Processed coordinates:', coordinates);          // Navigate to result page with all data including coordinates
+        navigate('/result', {
+          state: {
+            birdName: response.data?.prediction || 'Unknown Species',
+            birdInfo: response.data?.info || {},
+            audioFile: selectedFile.name,
+            coordinates: coordinates
+          }
+        });
 
       } catch (err) {
         console.error('Error uploading file:', err);

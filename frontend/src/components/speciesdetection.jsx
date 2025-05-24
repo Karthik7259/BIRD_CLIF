@@ -78,11 +78,13 @@ const SpeciesDetection = () => {
 
         // Navigate to result page with just the prediction and filename
         navigate('/result', {
-          state: {
-            birdName: response.data.prediction,
-            audioFile: selectedFile.name
-          }
-        });
+        state: {
+          birdName: response.data.prediction,
+          birdInfo: response.data.info,  // <- new addition from backend
+          audioFile: selectedFile.name
+        }
+      });
+
       } catch (err) {
         console.error('Error uploading file:', err);
         const errorMessage = err.response?.data?.error || err.message || 'Failed to analyze the audio';

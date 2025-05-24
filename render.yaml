@@ -1,0 +1,32 @@
+services:
+  # Backend API Service
+  - type: web
+    name: birdclif-api
+    env: python
+    buildCommand: cd backend && pip install -r requirements.txt
+    startCommand: cd "backend/ml model" && gunicorn app:app --bind 0.0.0.0:$PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.9.0
+      - key: FLASK_ENV
+        value: production
+      - key: GEMINI_API_KEY
+        sync: false # This will be set manually in Render dashboard
+    autoDeploy: true
+    disk:
+      name: uploads
+      mountPath: /opt/render/project/src/backend/ml model/uploads
+      sizeGB: 1
+
+  # Frontend Service
+  - type: web
+    name: birdclif-frontend
+    env: node
+    buildCommand: cd frontend && npm install && npm run build
+    startCommand: cd frontend && npm run preview -- --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: NODE_VERSION
+        value: 16.0.0
+      - key: VITE_API_URL
+        value: https://birdclif-api.onrender.com # Update this with your actual API URL
+    autoDeploy: true

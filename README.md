@@ -133,6 +133,72 @@ Check if the API server is running.
 
 
 
+## Deployment on Render
+
+### Prerequisites
+- A Render account (https://render.com)
+- Git repository hosted on GitHub/GitLab
+- Google Gemini API key
+
+### Deployment Steps
+
+1. **Fork/Push your repository**
+   - Make sure your code is in a Git repository
+   - Push to GitHub/GitLab
+
+2. **Create New Web Service on Render**
+   - Log in to your Render dashboard
+   - Click "New +"
+   - Select "Web Service"
+   - Connect your repository
+
+3. **Configure Backend Service**
+   - Name: `birdclif-api`
+   - Environment: `Python 3.9`
+   - Build Command: `cd backend && pip install -r requirements.txt`
+   - Start Command: `cd "ml model" && gunicorn app:app`
+   - Add Environment Variables:
+     - `FLASK_ENV`: `production`
+     - `GEMINI_API_KEY`: Your Gemini API key
+     - `MODEL_PATH`: `model_cache/`
+
+4. **Configure Frontend Service**
+   - Create another Web Service
+   - Name: `birdclif-frontend`
+   - Environment: `Node`
+   - Build Command: `cd frontend && npm install && npm run build`
+   - Start Command: `cd frontend && npm run preview -- --host 0.0.0.0 --port $PORT`
+   - Add Environment Variables:
+     - `VITE_API_URL`: URL of your backend service (e.g., `https://birdclif-api.onrender.com`)
+
+5. **Verify Deployment**
+   - Check the deployment logs for both services
+   - Test the health endpoint: `https://birdclif-api.onrender.com/api/health`
+   - Access your frontend application: `https://birdclif-frontend.onrender.com`
+
+### Automatic Deployments
+
+Render automatically deploys:
+- When you push to your main/master branch
+- When you manually trigger a deploy from the dashboard
+
+### Troubleshooting
+
+1. **Model Loading Issues**
+   - Check if model files are properly uploaded
+   - Verify Python version compatibility
+   - Check deployment logs for errors
+
+2. **Frontend Connection Issues**
+   - Verify `VITE_API_URL` is correct
+   - Check CORS configuration in backend
+   - Ensure API endpoints are accessible
+
+3. **Memory/Performance Issues**
+   - Consider upgrading to a paid plan for better resources
+   - Optimize model loading and caching
+   - Monitor resource usage in Render dashboard
+
 ## Troubleshooting
 
 ### Common Issues
@@ -153,3 +219,68 @@ Check if the API server is running.
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Deployment
+
+### Prerequisites for Deployment
+- A [Render.com](https://render.com) account
+- Git repository with your project
+- Gemini API key
+
+### Deployment Steps
+
+1. **Fork and Clone the Repository**
+   - Fork this repository to your GitHub account
+   - Clone your forked repository locally
+
+2. **Setup Environment Variables**
+   In your Render.com dashboard:
+   - Navigate to the "Environment" section
+   - Add the following variables:
+     - `GEMINI_API_KEY`: Your Gemini API key
+     - `FLASK_ENV`: Set to `production`
+     - `NODE_ENV`: Set to `production`
+
+3. **Deploy the Backend**
+   - In Render.com dashboard, click "New +"
+   - Select "Web Service"
+   - Connect your GitHub repository
+   - Choose the "Python" environment
+   - Set name to "birdclif-api"
+   - The build and start commands are configured in `render.yaml`
+   - Click "Create Web Service"
+
+4. **Deploy the Frontend**
+   - Click "New +" again
+   - Select "Web Service"
+   - Connect the same repository
+   - Choose the "Node" environment
+   - Set name to "birdclif-frontend"
+   - The build and start commands are configured in `render.yaml`
+   - Click "Create Web Service"
+
+5. **Verify Deployment**
+   - Wait for both services to finish deploying
+   - The backend API will be available at `https://birdclif-api.onrender.com`
+   - The frontend will be available at `https://birdclif-frontend.onrender.com`
+
+### Troubleshooting
+
+1. **Model Loading Issues**
+   - Check if the model files are properly cached in the `model_cache` directory
+   - Verify that the disk storage is properly mounted
+
+2. **API Connection Issues**
+   - Ensure the `VITE_API_URL` in the frontend service points to your backend service URL
+   - Check CORS settings in the backend if you encounter cross-origin issues
+
+3. **File Upload Issues**
+   - Verify that the uploads directory is properly mounted
+   - Check file permissions on the mounted storage
+
+### Maintenance
+
+- Monitor your application logs in the Render dashboard
+- Set up automated deployments by enabling "Auto-Deploy" in your service settings
+- Regularly check for package updates and security patches
+- Monitor disk usage for the uploads directory

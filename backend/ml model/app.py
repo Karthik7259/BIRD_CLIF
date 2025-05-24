@@ -7,6 +7,10 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import torch
 import librosa
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 from transformers import AutoFeatureExtractor, AutoModelForAudioClassification
 import requests
 import sys
@@ -22,7 +26,7 @@ app.logger.setLevel(logging.INFO)
 MODEL_NAME = "dima806/bird_sounds_classification"
 MODEL_DIR = os.path.join(os.path.dirname(__file__), "model_cache")
 
-GEMINI_API_KEY = ""
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
 
 if not GEMINI_API_KEY:

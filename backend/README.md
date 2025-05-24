@@ -2,6 +2,15 @@
 
 Backend service for the BirdClif bird species detection system, built with Flask and PyTorch.
 
+## Features
+
+- Bird species detection from audio files
+- Integration with Google's Gemini API for detailed species information
+- Wikipedia integration for species images
+- Geographical distribution data with coordinates
+- Real-time audio processing and analysis
+- Comprehensive species information including habitat, diet, and behavior
+
 ## Dependencies
 
 ```plaintext
@@ -58,7 +67,31 @@ Analyzes an audio file to detect and identify bird species.
 ```json
 {
     "prediction": "Little Tinamou",
-   
+    "info": {
+        "scientificName": "Scientific name of the bird",
+        "description": "Detailed description of the bird species",
+        "habitat": "Natural habitat information",
+        "diet": "Dietary preferences",
+        "song": "Description of bird's song/call",
+        "available in which countries": [
+            {
+                "country": "India",
+                "states": [
+                    {
+                        "state": "West Bengal",
+                        "longitude": "87.854976",
+                        "latitude": "22.978650"
+                    },
+                    {
+                        "state": "Kerala",
+                        "longitude": "76.2711",
+                        "latitude": "10.8505"
+                    }
+                ]
+            }
+        ],
+        "image": "URL to bird species image"
+    }
 }
 ```
 
@@ -99,6 +132,31 @@ Check if the API server is running properly.
 }
 ```
 
+## API Features
+
+### 1. Audio Analysis
+- Supports MP3 and WAV formats
+- Machine learning-based species identification
+- Real-time processing
+
+### 2. Species Information
+- Detailed species descriptions via Gemini API
+- Scientific names and classifications
+- Habitat and behavioral information
+- Dietary preferences
+- Song/call descriptions
+
+### 3. Geographical Data
+- Location-based distribution data
+- Precise coordinates for species sightings
+- State/region-wise distribution
+- Support for heatmap visualization
+
+### 4. Image Integration
+- Automatic species image retrieval from Wikipedia
+- High-resolution images when available
+- Fallback to placeholder images
+
 ## Directory Structure
 
 ```
@@ -125,7 +183,10 @@ DEBUG=True
 MODEL_PATH=model_cache/
 UPLOAD_FOLDER=uploads/
 MAX_CONTENT_LENGTH=10485760  # 10MB max-size
+GEMINI_API_KEY=your_gemini_api_key_here  # Required for species information
 ```
+
+Make sure to obtain a Google Gemini API key and set it in your environment variables. The API key is required for fetching detailed species information.
 
 ## Error Codes
 
